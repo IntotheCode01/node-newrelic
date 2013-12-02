@@ -1,11 +1,14 @@
 'use strict';
 
-var path        = require('path')
-  , test        = require('tap').test
-  , nock        = require('nock')
-  , dns         = require ('dns')
-  , Agent       = require(path.join(__dirname, '..', '..', 'lib', 'agent.js'))
-  , Transaction = require(path.join(__dirname, '..', '..', 'lib', 'transaction.js'))
+var path         = require('path')
+  , test         = require('tap').test
+  , nock         = require('nock')
+  , dns          = require ('dns')
+  , logger       = require(path.join(__dirname, '..', '..', 'lib',
+                                     'logger')).child({component : 'TEST'})
+  , configurator = require(path.join(__dirname, '..', '..', 'lib', 'config.js'))
+  , Agent        = require(path.join(__dirname, '..', '..', 'lib', 'agent.js'))
+  , Transaction  = require(path.join(__dirname, '..', '..', 'lib', 'transaction.js'))
   ;
 
 test("harvesting with a mocked collector that returns 413 after connect", function (t) {
@@ -19,13 +22,13 @@ test("harvesting with a mocked collector that returns 413 after connect", functi
 
     var RUN_ID      = 1337
       , url         = 'http://' + collector
-      , agent       = new Agent()
+      , agent       = new Agent(configurator.initialize(logger))
       , transaction = new Transaction(agent)
       ;
 
     function path(method, runID) {
       var fragment = '/agent_listener/invoke_raw_method?' +
-        'marshal_format=json&protocol_version=11&' +
+        'marshal_format=json&protocol_version=12&' +
         'license_key=license%20key%20here&method=' + method;
 
       if (runID) fragment += '&run_id=' + runID;
@@ -90,13 +93,13 @@ test("discarding metrics and errors after a 413", function (t) {
 
     var RUN_ID      = 1338
       , url         = 'http://' + collector
-      , agent       = new Agent()
+      , agent       = new Agent(configurator.initialize(logger))
       , transaction = new Transaction(agent)
       ;
 
     function path(method, runID) {
       var fragment = '/agent_listener/invoke_raw_method?' +
-        'marshal_format=json&protocol_version=11&' +
+        'marshal_format=json&protocol_version=12&' +
         'license_key=license%20key%20here&method=' + method;
 
       if (runID) fragment += '&run_id=' + runID;

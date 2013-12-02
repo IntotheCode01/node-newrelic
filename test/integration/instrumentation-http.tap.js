@@ -11,7 +11,7 @@ var path       = require('path')
 
 test("built-in http instrumentation should handle internal & external requests",
      function (t) {
-  t.plan(12);
+  t.plan(11);
 
   var agent = helper.instrumentMockedAgent();
 
@@ -28,9 +28,6 @@ test("built-in http instrumentation should handle internal & external requests",
     ;
 
   var external = http.createServer(function (request, response) {
-    t.ok(agent.getTransaction(),
-         "should be within the scope of (a different) transaction");
-
     response.writeHead(200,
                        {'Content-Length' : PAYLOAD.length,
                         'Content-Type'   : 'application/json'});
@@ -41,11 +38,10 @@ test("built-in http instrumentation should handle internal & external requests",
   var transaction;
   var internalResponseHandler = function (response) {
     return function (requestResponse) {
-      if (requestResponse.statusCode !== 200) return t.fail(requestResponse.statusCode);
-
-      // save for later assertions
       transaction = agent.getTransaction();
       t.ok(transaction, "handler is part of transaction");
+
+      if (requestResponse.statusCode !== 200) return t.fail(requestResponse.statusCode);
 
       requestResponse.setEncoding('utf8');
       requestResponse.on('data', function (data) {
@@ -90,7 +86,7 @@ test("built-in http instrumentation should handle internal & external requests",
     // this is where execution ends up -- test asserts go here
     response.on('end', function () {
       if (!transaction) {
-        t.bailout("Transaction wasn't set by response handler");
+        t.fail("Transaction wasn't set by response handler");
         return this.end();
       }
 
@@ -114,11 +110,12 @@ test("built-in http instrumentation should handle internal & external requests",
       t.equals(stats.callCount, 2,
                "should have accounted for all the internal http requests");
 
-      stats = agent.metrics.getOrCreateMetric('External/localhost/http', scope);
+      stats = agent.metrics.getOrCreateMetric('External/localhost:8321/http', scope);
       t.equals(stats.callCount, 1,
                "should record outbound HTTP requests in the agent's metrics");
 
-      stats = transaction.metrics.getOrCreateMetric('External/localhost/http', scope);
+      stats = transaction.metrics.getOrCreateMetric('External/localhost:8321/http',
+                                                    scope);
       t.equals(stats.callCount, 1,
                "should associate outbound HTTP requests with the inbound transaction");
 
@@ -194,7 +191,6 @@ test("built-in http instrumentation shouldn't swallow errors",
   });
 });
 
-
 test("built-in http instrumentation making outbound requests", function (t) {
   var agent = helper.instrumentMockedAgent();
 
@@ -227,6 +223,87 @@ test("built-in http instrumentation making outbound requests", function (t) {
       });
       res.pipe(sink);
     }).end();
+  }
+
+  function requestWithHost(next) {
+    request('options.host', {
+      host  : 'localhost',
+      port  : 1337,
+      path  : '/',
+      agent : false
+    }, next);
+  }
+
+  function requestWithHostname(next) {
+    request('options.hostname', {
+      hostname : 'localhost',
+      port     : 1337,
+      path     : '/',
+      agent    : false
+    }, next);
+  }
+
+  function requestWithNOTHING(next) {
+    request('nothing', {
+      port     : 1337,
+      path     : '/',
+      agent    : false
+    }, next);
+  }
+
+  server.listen(1337, function () {
+    helper.runInTransaction(agent, function () {
+      requestWithHost(function () {
+        requestWithHostname(function () {
+          requestWithNOTHING(function () {
+            t.end();
+          });
+        });
+      });
+    });
+  });
+});
+
+test("built-in http instrumentation making outbound requests obsoletely", function (t) {
+  var agent = helper.instrumentMockedAgent();
+
+  var server = http.createServer(function (req, res) {
+    var body = '{"status":"ok"}';
+    res.writeHead(200, {
+      'Content-Length' : body.length,
+      'Content-Type'   : 'text/plain' });
+    res.end(body);
+  });
+
+  this.tearDown(function () {
+    server.close();
+    helper.unloadAgent(agent);
+  });
+
+  function request(type, options, next) {
+    var port = options.port;
+    var host = options.host;
+    var path = options.path;
+
+    var req = http.createClient(port, host).request('GET', path);
+    req.on('response', function (res) {
+      res.on('end', function () {
+        t.equal(res.statusCode, 200, "got HTTP OK status code");
+      });
+
+      var sink = new StreamSink(function (err, body) {
+        if (err) {
+          t.fail(err);
+          return t.end();
+        }
+
+        t.deepEqual(JSON.parse(body), {status : 'ok'},
+                    "request with " + type + " defined succeeded");
+        next();
+      });
+      res.pipe(sink);
+    });
+    req.end();
   }
 
   function requestWithHost(next) {

@@ -41,6 +41,8 @@ describe("an instrumented Express application", function () {
 
     before(function () {
       agent = helper.instrumentMockedAgent();
+      agent.environment.clearDispatcher();
+      agent.environment.clearFramework();
 
       function Router() {}
       Router.prototype._match = function () { return {path : '/test/:id'}; };
@@ -172,7 +174,7 @@ describe("an instrumented Express application", function () {
 
         var match = stub.createServer().routes._match;
         expect(match()).eql({path : '/test/:id'});
-        expect(transaction.partialName).equal('Expressjs/POST#/test/:id');
+        expect(transaction.partialName).equal('Expressjs/POST//test/:id');
       });
     });
   });
@@ -184,6 +186,8 @@ describe("an instrumented Express application", function () {
 
     before(function () {
       agent = helper.instrumentMockedAgent();
+      agent.environment.clearDispatcher();
+      agent.environment.clearFramework();
 
       stub = {
         version : '3.1.4',
@@ -304,7 +308,7 @@ describe("an instrumented Express application", function () {
 
         var match = stub.Router.prototype.matchRequest;
         expect(match()).eql({path : 'test/:id'});
-        expect(transaction.partialName).equal('Expressjs/GET#test/:id');
+        expect(transaction.partialName).equal('Expressjs/GET/test/:id');
       });
     });
   });

@@ -54,14 +54,23 @@ describe('TraceAggregator', function () {
     agent.config.transaction_tracer.enabled = false;
     agent.traces.add(createTransaction('/test', 3000));
 
-    expect(agent.traces.trace).equal(null);
+    should.not.exist(agent.traces.trace);
   });
 
   it("shouldn't collect a trace if collect_traces is false", function () {
     agent.config.collect_traces = false;
     agent.traces.add(createTransaction('/test', 3000));
 
-    expect(agent.traces.trace).equal(null);
+    should.not.exist(agent.traces.trace);
+  });
+
+  it("should let the agent decide whether to ignore a transaction", function () {
+    var transaction = new Transaction(agent);
+    transaction.getTrace().setDurationInMillis(3000);
+    transaction.ignore = true;
+
+    agent.traces.add(transaction);
+    should.exist(agent.traces.trace);
   });
 
   describe("with top n support", function () {
@@ -85,11 +94,11 @@ describe('TraceAggregator', function () {
       expect(aggregator.capacity).equal(TOP_N);
     });
 
-    it("should track the slowest transaction in a harvest period if top_n is undefined",
+    it("should track the top 20 slowest transactions if top_n is unconfigured",
        function () {
       var aggregator = new TraceAggregator(config);
 
-      expect(aggregator.capacity).equal(1);
+      expect(aggregator.capacity).equal(20);
     });
 
     it("should track the slowest transaction in a harvest period if top_n is 0",
